@@ -57,16 +57,20 @@ final class AppState {
         sharedState.requestCacheReset()
     }
 
-    func setTarget(_ language: Language, enabled: Bool) {
+    /// 번역 언어를 켜거나 끈다. 최소 1개, 최대 3개를 지켜야 하며 바꾸지 못하면 false.
+    @discardableResult
+    func setTarget(_ language: Language, enabled: Bool) -> Bool {
         var targets = settings.enabledTargets
         if enabled {
+            guard targets.contains(language) || settings.canEnableMoreTargets else { return false }
             targets.insert(language)
         } else {
             // 번역 언어는 최소 하나는 켜져 있어야 한다.
-            guard targets.count > 1 else { return }
+            guard targets.count > 1 || !targets.contains(language) else { return false }
             targets.remove(language)
         }
         settings.enabledTargets = targets
+        return true
     }
 
     func openSystemSettings(using openURL: OpenURLAction) {

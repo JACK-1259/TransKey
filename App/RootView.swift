@@ -29,9 +29,9 @@ struct MainTabView: View {
             Tab("체험", systemImage: "keyboard") {
                 HomeView()
             }
-            Tab("언어 팩", systemImage: "arrow.down.circle") {
+            Tab("번역 언어", systemImage: "globe") {
                 NavigationStack {
-                    LanguagePackView()
+                    TranslationLanguagesView()
                 }
             }
             Tab("설정", systemImage: "gearshape") {

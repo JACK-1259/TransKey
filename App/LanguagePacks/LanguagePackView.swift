@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import TransKeyCore
 import Translation
 
 /// 온디바이스 번역 언어 팩 상태를 관리한다.
@@ -12,9 +13,11 @@ final class LanguagePackViewModel {
         var id: String { "\(source)-\(target)" }
 
         var title: String {
-            let name = { (code: String) in Locale.current.localizedString(forLanguageCode: code) ?? code }
+            let name = { (code: String) in Locale.current.localizedString(forIdentifier: code) ?? code }
             return "\(name(source)) → \(name(target))"
         }
+
+        var targetLanguage: Language { Language(rawValue: target) }
     }
 
     enum PackStatus: Equatable {
@@ -48,7 +51,8 @@ final class LanguagePackViewModel {
         Pair(source: "en", target: "es")
     ]
 
-    let pairs: [Pair]
+    private(set) var pairs: [Pair]
+    private(set) var isLoadingLanguages = false
     private(set) var statuses: [Pair: PackStatus] = [:]
     private(set) var lastError: String?
     var configuration: TranslationSession.Configuration?
@@ -60,6 +64,27 @@ final class LanguagePackViewModel {
 
     func status(for pair: Pair) -> PackStatus {
         statuses[pair] ?? .checking
+    }
+
+    /// 한국어 → `language` 언어 팩 상태.
+    func status(for language: Language) -> PackStatus {
+        status(for: Pair(source: Language.korean.code, target: language.code))
+    }
+
+    func requestDownload(for language: Language) {
+        requestDownload(for: Pair(source: Language.korean.code, target: language.code))
+    }
+
+    /// 기기의 Apple 번역이 지원하는 모든 언어를 "한국어 → 언어" 쌍으로 불러오고 상태를 확인한다.
+    /// 다른 앱(번역 앱, 설정)에서 받은 언어 팩도 시스템 전체가 공유하므로 여기서 "설치됨"으로 보인다.
+    func loadSupportedLanguages() async {
+        isLoadingLanguages = true
+        let languages = await Self.fetchSupportedLanguages()
+        pairs = languages
+            .filter { $0 != .korean }
+            .map { Pair(source: Language.korean.code, target: $0.code) }
+        await refresh()
+        isLoadingLanguages = false
     }
 
     var allInstalled: Bool {
@@ -92,7 +117,29 @@ final class LanguagePackViewModel {
     }
 
     @concurrent
+    private static func fetchSupportedLanguages() async -> [Language] {
+        var seen = Set<Language>()
+        // 같은 언어의 지역 변형(en, en-GB)은 하나로 합친다. 단, 중국어 간체/번체처럼 문자가 다른 경우는 따로 둔다.
+        let languages = await LanguageAvailability().supportedLanguages
+            .map { language -> Language in
+                let base = Language(language)
+                if base.code.hasPrefix("en") { return .english }
+                return base
+            }
+            .filter { seen.insert($0).inserted }
+        let list = languages.isEmpty ? Language.knownTranslationLanguages : languages
+        return list.sorted(by: Language.displayOrder)
+    }
+
+    @concurrent
     private static func fetchStatus(for pair: Pair) async -> PackStatus {
+        #if targetEnvironment(simulator)
+        // 시뮬레이터에서는 Apple 번역이 동작하지 않는다. 키보드의 데모 사전이 있는 언어만 "설치됨"으로 본다.
+        let demoLanguages = ["en", "ja", "es"]
+        if pair.source == Language.korean.code {
+            return demoLanguages.contains(pair.target) ? .installed : .unsupported
+        }
+        #endif
         let status = await LanguageAvailability().status(
             from: Locale.Language(identifier: pair.source),
             to: Locale.Language(identifier: pair.target)
@@ -156,31 +203,5 @@ extension View {
                 }
                 await model.finishPreparation(error: message)
             }
-    }
-}
-
-/// 언어 팩 탭.
-struct LanguagePackView: View {
-    @State private var model = LanguagePackViewModel(pairs: LanguagePackViewModel.allPairs)
-
-    var body: some View {
-        List {
-            Section {
-                LanguagePackRows(model: model)
-            } header: {
-                Text("번역 언어 팩")
-            } footer: {
-                Text("키보드는 언어 팩을 직접 받을 수 없어서, 여기서 미리 받아 둬야 해요. 받아 두면 인터넷 없이도 번역돼요.")
-            }
-            if let error = model.lastError {
-                Section {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                }
-            }
-        }
-        .navigationTitle("언어 팩")
-        .languagePackDownloads(model)
-        .refreshable { await model.refresh() }
     }
 }

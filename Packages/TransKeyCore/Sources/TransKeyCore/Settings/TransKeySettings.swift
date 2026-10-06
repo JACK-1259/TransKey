@@ -78,9 +78,14 @@ public struct TransKeySettings: Codable, Equatable, Sendable {
         enginePriority = try container.decodeIfPresent(EnginePriority.self, forKey: .enginePriority) ?? fallback.enginePriority
     }
 
-    /// 칩 순서(EN, JA, ES)를 유지한 활성 대상 언어 목록.
+    /// 켜 둔 번역 언어를 표시 순서(영어, 일본어, 중국어 …)로 정렬한 목록.
     public var orderedTargets: [Language] {
-        Language.chipOrder.filter { enabledTargets.contains($0) }
+        enabledTargets.sorted(by: Language.displayOrder)
+    }
+
+    /// 언어를 더 켤 수 있는지. 후보 바에는 최대 3개까지만 보여준다.
+    public var canEnableMoreTargets: Bool {
+        enabledTargets.count < Language.maxEnabledTargets
     }
 
     /// 원문 언어에 맞춘 칩 목록. 원문과 같은 언어는 빼고,

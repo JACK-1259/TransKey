@@ -20,20 +20,13 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(Language.chipOrder, id: \.self) { language in
-                        Toggle(isOn: targetBinding(language)) {
-                            Label {
-                                Text(languageName(language))
-                            } icon: {
-                                Text(language.flag)
-                            }
-                        }
-                        .disabled(isLastEnabledTarget(language))
+                    NavigationLink {
+                        TranslationLanguagesView()
+                    } label: {
+                        LabeledContent("번역 언어", value: enabledLanguagesSummary)
                     }
-                } header: {
-                    Text("번역 언어")
                 } footer: {
-                    Text("한국어를 입력하면 켜 둔 언어로 번역돼요. 최소 한 개는 켜 있어야 해요.")
+                    Text("한국어를 입력하면 켜 둔 언어로 번역돼요. 언어 팩을 받은 언어 중 최대 \(Language.maxEnabledTargets)개까지 켤 수 있어요.")
                 }
 
                 Section {
@@ -93,18 +86,10 @@ struct SettingsView: View {
         }
     }
 
-    private func targetBinding(_ language: Language) -> Binding<Bool> {
-        Binding(
-            get: { appState.settings.enabledTargets.contains(language) },
-            set: { appState.setTarget(language, enabled: $0) }
-        )
-    }
-
-    private func isLastEnabledTarget(_ language: Language) -> Bool {
-        appState.settings.enabledTargets == [language]
-    }
-
-    private func languageName(_ language: Language) -> String {
-        Locale.current.localizedString(forLanguageCode: language.code) ?? language.shortLabel
+    /// "🇺🇸 🇯🇵 영어, 일본어" 형태의 요약.
+    private var enabledLanguagesSummary: String {
+        appState.settings.orderedTargets
+            .map { "\($0.flag) \($0.displayName())" }
+            .joined(separator: ", ")
     }
 }

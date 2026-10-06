@@ -35,8 +35,10 @@ struct SimulatorDemoProvider: TranslationProvider {
             case .english: result[target] = entry.en
             case .japanese: result[target] = entry.ja
             case .spanish: result[target] = entry.es
+            default: continue  // 데모 사전에 없는 언어
             }
         }
+        guard !result.isEmpty else { throw TranslationError.unsupported }
         return result
     }
 }
