@@ -43,7 +43,8 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateBar = CandidateBarView()
     private let keyboardView = KeyboardView()
     private lazy var feedback = KeyFeedback(view: view)
-    private lazy var coordinator = TranslationCoordinator(provider: Self.makeProvider())
+    // 첫 번역 때 기기가 번역 모델을 불러오느라 몇 초 걸릴 수 있어 타임아웃을 넉넉히 둔다.
+    private lazy var coordinator = TranslationCoordinator(provider: Self.makeProvider(), timeout: .seconds(10))
 
     private var heightConstraint: NSLayoutConstraint?
     private var candidateBarHeightConstraint: NSLayoutConstraint?

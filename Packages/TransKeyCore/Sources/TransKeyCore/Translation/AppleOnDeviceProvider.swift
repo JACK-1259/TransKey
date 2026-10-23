@@ -50,13 +50,10 @@ public struct AppleOnDeviceProvider: TranslationProvider {
 
         let sourceLanguage = Locale.Language(identifier: source.code)
         let targetLanguage = Locale.Language(identifier: target.code)
-        let session: TranslationSession
-        if #available(iOS 26.4, macOS 26.4, *) {
-            session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage,
-                                         preferredStrategy: .lowLatency)
-        } else {
-            session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage)
-        }
+        // 언어 팩(앱에서 받은 것)과 같은 기본 모드로 번역한다.
+        // iOS 26.4의 저지연(.lowLatency) 모드는 모델이 따로 필요할 수 있어, "설치됨"인데도
+        // 번역이 실패(TranslationErrorDomain#1)하는 원인이 될 수 있어 쓰지 않는다.
+        let session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage)
 
         do {
             let translated = try await session.translate(text).targetText
@@ -65,10 +62,37 @@ public struct AppleOnDeviceProvider: TranslationProvider {
             return translated
         } catch is CancellationError {
             throw CancellationError()
+        } catch Translation.TranslationError.notInstalled {
+            throw TranslationError.languagePackMissing
+        } catch Translation.TranslationError.unsupportedLanguagePairing,
+                Translation.TranslationError.unsupportedSourceLanguage,
+                Translation.TranslationError.unsupportedTargetLanguage {
+            throw TranslationError.unsupported
         } catch {
-            // 에러 설명에 원문이 섞일 수 있으므로 타입 이름만 남긴다.
-            throw TranslationError.failed(String(describing: type(of: error)))
+            throw TranslationError.failed(Self.describe(error))
         }
+    }
+
+    /// 프레임워크 오류를 "종류 (도메인#코드): 설명"으로 바꾼다.
+    /// Apple 번역의 오류는 종류가 달라도 NSError 코드가 모두 1이라, 종류 이름을 따로 붙인다.
+    /// 설명은 Apple이 주는 일반 문장이며 사용자 원문은 포함하지 않는다.
+    static func describe(_ error: any Error) -> String {
+        let kinds: [(String, Translation.TranslationError)] = [
+            ("unsupportedSourceLanguage", .unsupportedSourceLanguage),
+            ("unsupportedTargetLanguage", .unsupportedTargetLanguage),
+            ("unsupportedLanguagePairing", .unsupportedLanguagePairing),
+            ("unableToIdentifyLanguage", .unableToIdentifyLanguage),
+            ("nothingToTranslate", .nothingToTranslate),
+            ("alreadyCancelled", .alreadyCancelled),
+            ("notInstalled", .notInstalled),
+            ("internalError", .internalError)
+        ]
+        let kind = kinds.first { $0.1 ~= error }?.0 ?? "unknown"
+        let nsError = error as NSError
+        let reason = (error as? LocalizedError)?.failureReason
+            ?? (error as? LocalizedError)?.errorDescription
+            ?? nsError.localizedDescription
+        return "\(kind) (\(nsError.domain)#\(nsError.code)): \(reason)"
     }
 }
 #endif

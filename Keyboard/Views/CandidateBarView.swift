@@ -82,10 +82,15 @@ final class CandidateBarView: UIView {
             showMessage(idleMessage)
         case .active(_, let allChips):
             // 번역에 실패한 칩(미지원, 언어 팩 없음, 오류)은 숨긴다.
+            // 개발용(Debug) 빌드에서는 원인을 찾을 수 있도록 실패한 칩도 오류 내용과 함께 보여준다.
+            #if DEBUG
+            let visibleChips = allChips
+            #else
             let visibleChips = allChips.filter {
                 if case .failure = $0.state { return false }
                 return true
             }
+            #endif
             guard !visibleChips.isEmpty else {
                 let needsLanguagePack = allChips.contains { $0.state == .failure(.languagePackMissing) }
                 showMessage(needsLanguagePack ? String(localized: "TransKey 앱에서 언어 팩을 받아 주세요") : "")

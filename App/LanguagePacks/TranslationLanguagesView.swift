@@ -14,6 +14,9 @@ struct TranslationLanguagesView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = LanguagePackViewModel(pairs: [])
     @State private var showsLimitAlert = false
+    #if DEBUG
+    @State private var diagnosticResult: String?
+    #endif
 
     /// 켤 수 있거나 이미 켜 둔 언어.
     private var availableLanguages: [Language] {
@@ -75,6 +78,24 @@ struct TranslationLanguagesView: View {
                 #endif
             }
 
+            #if DEBUG
+            Section {
+                Button("'사과' 번역 테스트 (앱에서 실행)") {
+                    diagnosticResult = "번역 중…"
+                    Task { diagnosticResult = await Self.runDiagnostic(targets: appState.settings.orderedTargets) }
+                }
+                if let diagnosticResult {
+                    Text(diagnosticResult)
+                        .font(.footnote.monospaced())
+                        .textSelection(.enabled)
+                }
+            } header: {
+                Text("개발용 진단")
+            } footer: {
+                Text("키보드와 같은 번역 코드를 앱에서 실행해요. 앱에서는 되는데 키보드에서만 안 되면 키보드 익스텐션 제약이 원인이에요.")
+            }
+            #endif
+
             if let error = model.lastError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -98,6 +119,26 @@ struct TranslationLanguagesView: View {
             Text("키보드 위 번역 칩은 \(Language.maxEnabledTargets)칸이에요. 다른 언어를 끄고 다시 켜 주세요.")
         }
     }
+
+    #if DEBUG
+    /// 켜 둔 언어마다 "사과"를 번역해 보고, 언어별 결과와 걸린 시간을 한 줄씩 돌려준다.
+    @concurrent
+    private static func runDiagnostic(targets: [Language]) async -> String {
+        var lines: [String] = []
+        for target in targets {
+            let started = ContinuousClock.now
+            do {
+                let result = try await AppleOnDeviceProvider().translate("사과", from: .korean, to: [target])
+                let ms = (ContinuousClock.now - started).components.seconds * 1000
+                    + (ContinuousClock.now - started).components.attoseconds / 1_000_000_000_000_000
+                lines.append("\(target.shortLabel): ✅ \(result[target] ?? "-") (\(ms)ms)")
+            } catch {
+                lines.append("\(target.shortLabel): ❌ \(error)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+    #endif
 
     @ViewBuilder
     private func toggleControl(for language: Language) -> some View {

@@ -106,12 +106,32 @@ final class CandidateChipView: UIControl {
             default:
                 resultLabel.text = "—"
                 retryIcon.isHidden = false
+                #if DEBUG
+                // 개발용: 실패 원인을 그대로 보여준다(원문은 포함되지 않음).
+                resultLabel.text = Self.debugDescription(of: error)
+                resultLabel.font = .systemFont(ofSize: 10, weight: .regular)
+                resultLabel.textColor = .systemRed
+                retryIcon.isHidden = true
+                #endif
                 accessibilityLabel = String(localized: "\(languageName) 번역 실패")
                 accessibilityHint = String(localized: "탭하면 다시 시도해요")
             }
         }
         setNeedsLayout()
     }
+
+    #if DEBUG
+    private static func debugDescription(of error: TranslationError) -> String {
+        switch error {
+        case .languagePackMissing: "팩 없음"
+        case .unsupported: "미지원"
+        case .emptyInput: "빈 입력"
+        case .timeout: "시간 초과"
+        case .offline: "오프라인"
+        case .failed(let detail): detail
+        }
+    }
+    #endif
 
     /// 탭 성공 시 체크 표시 애니메이션.
     func playCheckAnimation() {
