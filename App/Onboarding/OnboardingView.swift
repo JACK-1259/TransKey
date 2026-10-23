@@ -13,6 +13,7 @@ struct OnboardingView: View {
     @Environment(\.openURL) private var openURL
     @State private var step: Step = .addKeyboard
     @State private var languagePacks = LanguagePackViewModel(pairs: LanguagePackViewModel.essentialPairs)
+    @State private var showsAllLanguages = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +33,19 @@ struct OnboardingView: View {
         }
         .background(Color(.systemGroupedBackground))
         .languagePackDownloads(languagePacks)
+        .sheet(isPresented: $showsAllLanguages, onDismiss: {
+            // 시트에서 받은 언어 팩이 영어·일본어였을 수 있으니 상태를 다시 읽는다.
+            Task { await languagePacks.refresh() }
+        }) {
+            NavigationStack {
+                TranslationLanguagesView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("완료") { showsAllLanguages = false }
+                        }
+                    }
+            }
+        }
     }
 
     // MARK: - Chrome
@@ -122,6 +136,16 @@ struct OnboardingView: View {
                             .font(.footnote)
                             .foregroundStyle(.orange)
                     }
+                    // 영어·일본어 외의 언어(약 20개)를 받고 켤 수 있는 전체 화면으로 연결한다.
+                    Button {
+                        showsAllLanguages = true
+                    } label: {
+                        Label("다른 언어도 받기", systemImage: "globe")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
                 }
             }
         case .tryIt:
