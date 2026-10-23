@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.example.transkey</string>
+		<string>group.com.jack1259.transkey</string>
 	</array>
 </dict>
 </plist>
