@@ -216,10 +216,17 @@ TransKey/
 1. 아이폰을 USB로 연결하고, 아이폰에서 **설정 › 개인정보 보호 및 보안 › 개발자 모드**를 켜요.
 2. Xcode에서 **TransKey**, **TransKeyKeyboard** 두 타깃의 **Signing & Capabilities**에서
    - Team을 본인 계정으로 선택
-   - Bundle Identifier의 `com.example`을 본인만의 이름으로 변경
+   - 직접 빌드한다면 Bundle Identifier의 `com.jack1259`을 본인만의 이름으로 변경
    - App Group 이름도 같이 변경(`Config/*.entitlements`, `AppGroup.swift`)
-3. 기기를 아이폰으로 고르고 **⌘R**.
+3. 기기를 아이폰으로 고르고 **⌘R**. 처음 설치하면 아이폰의 **설정 › 일반 › VPN 및 기기 관리**에서 개발자를 신뢰해요.
 4. TransKey 앱의 **번역 언어** 탭에서 원하는 언어의 언어 팩을 받고 토글을 켜요(최대 3개).
+
+> **무료 개발자 계정(Personal Team)이라면** App Group 권한을 받을 수 없어 서명이 실패해요.
+> 엔타이틀먼트를 비우고 빌드하면 설치는 돼요(앱 설정이 키보드에 공유되지 않는 제한이 있어요).
+> ```bash
+> xcodebuild -scheme TransKey -configuration Release -destination 'id=<기기 UDID>' \
+>   DEVELOPMENT_TEAM=<팀 ID> CODE_SIGN_ENTITLEMENTS= -allowProvisioningUpdates build
+> ```
 
 ### 테스트
 
@@ -238,10 +245,22 @@ cd Packages/TransKeyCore && swift test
 | 항목 | 내용 |
 |---|---|
 | 시뮬레이터 번역 | Apple 번역이 시뮬레이터를 지원하지 않아 데모 사전만 동작해요. |
-| 키보드 안에서의 Apple 번역 | 문서상 금지되지는 않았지만 공식 보장도 없어요. 실기기 검증이 필요해요. |
+| 키보드 안에서의 Apple 번역 | ✅ 실기기(iPhone 16, iOS 27)에서 동작 확인. 단, 저지연 모드(`.lowLatency`)는 쓰지 않아요([개발 기록 #7](docs/DEVELOPMENT_LOG.md#7-실기기에서-번역이-전혀-안-됨-translationerrordomain1)). |
 | 전체 접근이 꺼져 있을 때 | 클립보드 복사와 햅틱이 동작하지 않아요(iOS 규칙). |
-| 무료 개발자 계정 | App Group을 지원하지 않을 수 있어, 앱 설정이 키보드에 반영되지 않을 수 있어요. |
+| 무료 개발자 계정 | App Group을 지원하지 않아, 앱 설정과 연결 상태가 키보드와 공유되지 않아요. |
 | 영어 UI | 아직 한국어만 지원해요. |
+
+## 개발 기록
+
+개발하면서 만난 문제와 해결 과정은 [**docs/DEVELOPMENT_LOG.md**](docs/DEVELOPMENT_LOG.md)에 정리했어요.
+
+| 문제 | 해결 |
+|---|---|
+| 실기기에서 번역이 전혀 안 됨 (`TranslationErrorDomain#1`) | 저지연 모드 → 기본 모드, 오류 종류 구분, 개발용 진단 추가 |
+| 한글 입력이 기본 키보드보다 버벅임 | 화면 가장자리 터치 지연 제거, 키 입력 후 부가 작업 미루기 |
+| 키보드가 뜨자마자 크래시 | 시스템이 호출하는 `init(nibName:bundle:)` 구현 |
+| 무료 계정 App Group 서명 실패 | 번들 ID 변경, 엔타이틀먼트 없이 빌드 |
+| 번역 언어 고정 | 약 20개 언어 지원, 다른 앱에서 받은 언어 팩 자동 인식 |
 
 ## 개인정보
 
