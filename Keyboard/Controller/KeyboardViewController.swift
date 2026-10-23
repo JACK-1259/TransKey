@@ -164,6 +164,7 @@ final class KeyboardViewController: UIInputViewController {
         feedback.prepare()
         reportStatusAndApplyRequests()
         resetComposition()
+        appliedSecureState = nil
         refreshFromDocument()
     }
 
@@ -197,6 +198,16 @@ final class KeyboardViewController: UIInputViewController {
         coordinator.clear()
     }
 
+    /// ④ 키보드가 화면에 완전히 나타난 뒤.
+    /// iOS는 화면 가장자리(좌우 끝, 맨 아래)에서 시스템 제스처(뒤로 가기, 홈)를 먼저 확인하느라
+    /// 키보드 터치를 잠깐 붙잡아 둔다. 그래서 ㅂ·ㅔ·ㅁ·ㅣ 같은 끝 키나 맨 아래 줄이 늦게 반응한다.
+    /// 창의 제스처 인식기가 터치를 지연시키지 않도록 꺼서 기본 키보드처럼 바로 반응하게 한다.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        view.window?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
+        view.window?.superview?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
+    }
+
     // MARK: - UITextInputDelegate
 
     // iOS가 "입력창 내용이나 커서가 바뀌었다"고 알려 주는 콜백.
@@ -211,17 +222,31 @@ final class KeyboardViewController: UIInputViewController {
         super.selectionDidChange(textInput)
         syncCompositionWithDocument()
         updateAutoCapitalization()
-        scheduleTranslation()
+        scheduleDeferredUpdates()
     }
 
     // MARK: - State → View
 
     private func refreshFromDocument() {
         updateAppearance()
-        updateReturnKey()
         updateSecureState()
         updateAutoCapitalization()
-        scheduleTranslation()
+        scheduleDeferredUpdates()
+    }
+
+    /// 키 입력 직후에 꼭 하지 않아도 되는 일(리턴 키 갱신, 번역 요청)을 다음 실행 주기로 미룬다.
+    /// 빠르게 여러 키를 눌러도 한 번으로 합쳐지고, 키 입력 처리 자체는 바로 끝나서 반응이 빨라진다.
+    private var hasPendingDeferredUpdates = false
+
+    private func scheduleDeferredUpdates() {
+        guard !hasPendingDeferredUpdates else { return }
+        hasPendingDeferredUpdates = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hasPendingDeferredUpdates = false
+            self.updateReturnKey()
+            self.scheduleTranslation()
+        }
     }
 
     /// 비밀번호 등 보안 입력창인지. 이때는 번역, 네트워크, 로깅을 모두 끈다.
@@ -260,8 +285,13 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.shiftState = page == .letters ? shift.state : .off
     }
 
+    /// 마지막으로 반영한 보안 입력창 상태. 바뀌었을 때만 높이를 다시 계산한다.
+    private var appliedSecureState: Bool?
+
     private func updateSecureState() {
         let secure = isSecureContext
+        guard secure != appliedSecureState else { return }
+        appliedSecureState = secure
         candidateBar.isHidden = secure
         if secure {
             coordinator.clear()
@@ -523,10 +553,10 @@ final class KeyboardViewController: UIInputViewController {
         afterEdit()
     }
 
+    /// 입력·삭제 직후. 다음 키의 대소문자에 영향을 주는 자동 대문자만 즉시 처리하고 나머지는 미룬다.
     private func afterEdit() {
         updateAutoCapitalization()
-        updateReturnKey()
-        scheduleTranslation()
+        scheduleDeferredUpdates()
     }
 
     /// 백스페이스를 누르고 있으면 0.45초 뒤부터 반복 삭제하고, 15번 이후에는 더 빨리 지운다.
