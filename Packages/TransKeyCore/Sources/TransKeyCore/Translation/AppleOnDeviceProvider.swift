@@ -34,6 +34,26 @@ public struct AppleOnDeviceProvider: TranslationProvider {
         )
     }
 
+    /// `source`에서 번역할 수 있도록 언어 팩이 설치된 언어 목록(표시 순서).
+    /// 언어 팩은 아이폰 전체가 공유하므로 키보드에서도 확인할 수 있다. 언어마다 동시에 확인한다.
+    public static func installedTargets(
+        from source: Language = .korean,
+        candidates: [Language] = Language.knownTranslationLanguages
+    ) async -> [Language] {
+        await withTaskGroup(of: Language?.self) { group in
+            for target in candidates where target != source {
+                group.addTask {
+                    await status(from: source, to: target) == .installed ? target : nil
+                }
+            }
+            var installed: [Language] = []
+            for await language in group {
+                if let language { installed.append(language) }
+            }
+            return installed.sorted(by: Language.displayOrder)
+        }
+    }
+
     /// 한 언어 쌍을 번역한다.
     /// 1) 언어 팩이 설치돼 있는지 확인 → 2) 세션 생성 → 3) 번역.
     private static func translate(_ text: String, from source: Language, to target: Language) async throws -> String {

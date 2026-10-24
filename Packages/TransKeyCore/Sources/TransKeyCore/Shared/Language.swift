@@ -74,6 +74,16 @@ public struct Language: RawRepresentable, Hashable, Codable, Sendable, Identifia
         "vi", "th", "id", "tr", "pl", "nl", "uk", "ar-AE", "hi", "ko"
     ].map { Language(rawValue: $0) }
 
+    /// 앱 설정을 공유받지 못하는 키보드가 쓸 번역 언어.
+    /// 언어 팩이 설치된 언어 중 표시 순서상 앞의 최대 3개를 고르고, 하나도 없으면 기본값을 쓴다.
+    public static func autoSelectedTargets(fromInstalled installed: [Language]) -> Set<Language> {
+        let picked = installed
+            .filter { $0 != .korean }
+            .sorted(by: displayOrder)
+            .prefix(maxEnabledTargets)
+        return picked.isEmpty ? Set(defaultTargets) : Set(picked)
+    }
+
     /// 화면과 후보 바에서의 정렬 순서. 많이 쓰는 언어를 앞에, 나머지는 코드 순.
     public static func displayOrder(_ lhs: Language, _ rhs: Language) -> Bool {
         let order = knownTranslationLanguages

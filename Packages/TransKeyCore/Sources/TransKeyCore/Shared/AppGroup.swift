@@ -9,4 +9,9 @@ public enum AppGroup {
     public static var containerURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
     }
+
+    /// 앱과 키보드가 설정을 공유할 수 있는지.
+    /// 무료 개발자 계정 빌드처럼 App Group 권한 없이 설치되면 false이고,
+    /// 이때 키보드는 앱에서 고른 번역 언어를 읽을 수 없다.
+    public static var isAvailable: Bool { containerURL != nil }
 }

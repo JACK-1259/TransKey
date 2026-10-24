@@ -51,3 +51,25 @@ final class LanguageTests: XCTestCase {
         XCTAssertEqual(settings.targets(for: .korean), [.english, Language("zh-TW"), Language("fr")])
     }
 }
+
+final class AutoSelectedTargetsTests: XCTestCase {
+    func testPicksInstalledLanguagesInDisplayOrder() {
+        let installed = [Language.spanish, .japanese, .english]
+        XCTAssertEqual(Language.autoSelectedTargets(fromInstalled: installed), [.english, .japanese, .spanish])
+    }
+
+    func testLimitsToMaxEnabledTargets() {
+        let installed = [Language("fr"), .spanish, .japanese, .english, Language("de")]
+        let picked = Language.autoSelectedTargets(fromInstalled: installed)
+        XCTAssertEqual(picked.count, Language.maxEnabledTargets)
+        XCTAssertEqual(picked, [.english, .japanese, .spanish])
+    }
+
+    func testFallsBackToDefaultsWhenNothingInstalled() {
+        XCTAssertEqual(Language.autoSelectedTargets(fromInstalled: []), Set(Language.defaultTargets))
+    }
+
+    func testIgnoresKorean() {
+        XCTAssertEqual(Language.autoSelectedTargets(fromInstalled: [.korean, Language("fr")]), [Language("fr")])
+    }
+}
