@@ -5,6 +5,7 @@ import UIKit
 protocol CandidateBarViewDelegate: AnyObject {
     func candidateBar(_ bar: CandidateBarView, didSelect text: String, language: Language, chip: CandidateChipView)
     func candidateBarDidRequestRetry(_ bar: CandidateBarView)
+    func candidateBarDidTapLanguageButton(_ bar: CandidateBarView)
 }
 
 /// 키보드 최상단 후보 바. iOS 자동완성 바처럼 칩을 균등 분할해 보여준다.
@@ -20,6 +21,11 @@ final class CandidateBarView: UIView {
     private let messageLabel = UILabel()
     private let stack = UIStackView()
     private let toastLabel = PaddedLabel()
+    private let languageButton = UIButton(type: .system)
+
+    @objc private func languageButtonTapped() {
+        delegate?.candidateBarDidTapLanguageButton(self)
+    }
     private var chips: [CandidateChipView] = []
     private var toastTask: Task<Void, Never>?
 
@@ -46,16 +52,27 @@ final class CandidateBarView: UIView {
         toastLabel.alpha = 0
         toastLabel.isAccessibilityElement = false
 
-        for view in [messageLabel, stack, toastLabel] as [UIView] {
+        // 오른쪽 끝 번역 언어 버튼: 키보드 안에서 번역 언어를 고르는 패널을 연다.
+        languageButton.setImage(UIImage(systemName: "translate",
+                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 15)), for: .normal)
+        languageButton.tintColor = KeyboardTheme.secondaryText
+        languageButton.accessibilityLabel = String(localized: "번역 언어 고르기")
+        languageButton.addTarget(self, action: #selector(languageButtonTapped), for: .touchUpInside)
+
+        for view in [messageLabel, stack, toastLabel, languageButton] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
             messageLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            messageLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            messageLabel.trailingAnchor.constraint(equalTo: languageButton.leadingAnchor, constant: -4),
+            languageButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            languageButton.topAnchor.constraint(equalTo: topAnchor),
+            languageButton.bottomAnchor.constraint(equalTo: bottomAnchor),
+            languageButton.widthAnchor.constraint(equalToConstant: 40),
             messageLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            stack.trailingAnchor.constraint(equalTo: languageButton.leadingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             toastLabel.centerXAnchor.constraint(equalTo: centerXAnchor),

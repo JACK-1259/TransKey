@@ -29,6 +29,8 @@ final class KeyboardViewController: UIInputViewController {
         static let doubleSpaceInterval: TimeInterval = 0.35
         static let inputLanguageKey = "transkey.inputLanguage"
         static let fullAccessHintKey = "transkey.didShowFullAccessHint"
+        static let autoTargetsKey = "transkey.autoSelectedTargets"
+        static let keyboardTargetsKey = "transkey.keyboardSelectedTargets"
     }
 
     // 앱과 공유하는 저장소(App Group). 설정값, 입력 언어, 키보드 상태만 저장하고
@@ -158,6 +160,14 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         settings = settingsStore.load()
+        if !AppGroup.isAvailable {
+            // 키보드에서 직접 고른 언어가 있으면 그것을, 없으면 설치된 언어 팩에서 자동으로 고른다.
+            if let picked = sharedDefaults.stringArray(forKey: Constants.keyboardTargetsKey), !picked.isEmpty {
+                settings.enabledTargets = Set(picked.map { Language(rawValue: $0) })
+            } else {
+                applyInstalledLanguageFallback()
+            }
+        }
         feedback.hapticsEnabled = settings.hapticsEnabled
         feedback.soundEnabled = settings.keySoundEnabled
         feedback.hasFullAccess = hasFullAccess
@@ -166,6 +176,34 @@ final class KeyboardViewController: UIInputViewController {
         resetComposition()
         appliedSecureState = nil
         refreshFromDocument()
+    }
+
+    // MARK: - 설정 공유가 안 될 때의 번역 언어
+    //
+    // 무료 개발자 계정 빌드처럼 App Group 없이 설치되면 키보드는 앱에서 고른 번역 언어를 읽을 수 없다.
+    // 대신 아이폰 전체가 공유하는 언어 팩 설치 상태를 키보드가 직접 확인해서,
+    // 설치된 언어 중 앞의 최대 3개(영어 → 일본어 → 중국어 → 스페인어 … 순)를 칩으로 보여준다.
+
+    private var installedLanguagesTask: Task<Void, Never>?
+    private var languagePicker: LanguagePickerView?
+
+    private func applyInstalledLanguageFallback() {
+        // 1) 지난번에 확인한 목록을 바로 적용해 칩이 즉시 올바르게 뜨게 한다.
+        if let cached = sharedDefaults.stringArray(forKey: Constants.autoTargetsKey), !cached.isEmpty {
+            settings.enabledTargets = Set(cached.map { Language(rawValue: $0) })
+        }
+        // 2) 백그라운드에서 다시 확인하고, 바뀌었으면 저장하고 칩을 갱신한다.
+        installedLanguagesTask?.cancel()
+        installedLanguagesTask = Task { [weak self] in
+            let installed = await AppleOnDeviceProvider.installedTargets()
+            guard let self, !Task.isCancelled, !installed.isEmpty else { return }
+            let targets = Language.autoSelectedTargets(fromInstalled: installed)
+            guard targets != self.settings.enabledTargets else { return }
+            self.settings.enabledTargets = targets
+            self.sharedDefaults.set(targets.sorted(by: Language.displayOrder).map(\.code),
+                                    forKey: Constants.autoTargetsKey)
+            self.scheduleTranslation()
+        }
     }
 
     /// 앱이 연결 상태를 보여줄 수 있도록 상태를 기록하고, 앱에서 요청한 캐시 삭제를 반영한다.
@@ -658,5 +696,50 @@ extension KeyboardViewController: CandidateBarViewDelegate {
 
     func candidateBarDidRequestRetry(_ bar: CandidateBarView) {
         coordinator.retry()
+    }
+
+    /// 자판 자리를 덮는 번역 언어 패널을 연다. 언어 팩이 설치된 언어만 보여준다.
+    func candidateBarDidTapLanguageButton(_ bar: CandidateBarView) {
+        guard languagePicker == nil else { return }
+        commitComposition()
+        let picker = LanguagePickerView(selection: settings.orderedTargets)
+        picker.delegate = self
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.topAnchor.constraint(equalTo: keyboardView.topAnchor),
+            picker.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor),
+            picker.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor)
+        ])
+        keyboardView.isHidden = true
+        languagePicker = picker
+        picker.showLoading()
+        Task { [weak picker] in
+            #if targetEnvironment(simulator)
+            let installed: [Language] = [.english, .japanese, .spanish]  // 데모 사전 언어
+            #else
+            let installed = await AppleOnDeviceProvider.installedTargets()
+            #endif
+            picker?.show(installed: installed)
+        }
+    }
+}
+
+// MARK: - LanguagePickerViewDelegate
+
+extension KeyboardViewController: LanguagePickerViewDelegate {
+    /// 고른 언어를 키보드에 저장하고(설정 공유가 되면 앱 설정에도 반영) 번역을 다시 요청한다.
+    func languagePicker(_ picker: LanguagePickerView, didFinishWith selection: [Language]) {
+        picker.removeFromSuperview()
+        languagePicker = nil
+        keyboardView.isHidden = false
+        guard !selection.isEmpty else { return }
+        settings.enabledTargets = Set(selection)
+        sharedDefaults.set(selection.map(\.code), forKey: Constants.keyboardTargetsKey)
+        if AppGroup.isAvailable {
+            settingsStore.save(settings)
+        }
+        scheduleTranslation()
     }
 }

@@ -53,7 +53,12 @@ struct TranslationLanguagesView: View {
                         .monospacedDigit()
                 }
             } footer: {
-                Text("최대 \(Language.maxEnabledTargets)개까지 켤 수 있어요. 켠 언어가 키보드 위 번역 칩으로 나타나요.")
+                if AppGroup.isAvailable {
+                    Text("최대 \(Language.maxEnabledTargets)개까지 켤 수 있어요. 켠 언어가 키보드 위 번역 칩으로 나타나요.")
+                } else {
+                    // 무료 개발자 계정 빌드: App Group이 없어 이 토글이 키보드에 전달되지 않는다.
+                    Text("지금 설치된 버전에서는 이 설정이 키보드에 전달되지 않아요. 키보드 위 번역 칩 줄 오른쪽 끝의 번역 언어 버튼을 눌러 키보드에서 직접 골라 주세요(최대 \(Language.maxEnabledTargets)개). 고르기 전에는 설치된 언어 중 앞의 \(Language.maxEnabledTargets)개가 자동으로 쓰여요.")
+                }
             }
 
             Section {
