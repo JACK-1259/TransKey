@@ -64,6 +64,8 @@ final class KeyboardViewController: UIInputViewController {
 
     /// 칩으로 번역문을 넣은 직후에는 그 번역문을 다시 번역하지 않는다(다음 키 입력 전까지).
     private var suppressTranslation = false
+    /// 칩으로 넣은 텍스트. 문서가 이 텍스트로 끝나지 않게 바뀌면(붙여넣기, 커서 이동) 번역 멈춤을 푼다.
+    private var lastInsertedTranslation: String?
 
     /// 시스템이 익스텐션을 띄울 때 호출하는 이니셜라이저. 반드시 오버라이드해야 한다.
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -252,12 +254,14 @@ final class KeyboardViewController: UIInputViewController {
     // 사용자가 입력창을 직접 탭해서 커서를 옮기거나, 앱이 텍스트를 바꿨을 때 호출된다.
     override func textDidChange(_ textInput: (any UITextInput)?) {
         super.textDidChange(textInput)
+        releaseSuppressionIfChangedExternally()
         syncCompositionWithDocument()
         refreshFromDocument()
     }
 
     override func selectionDidChange(_ textInput: (any UITextInput)?) {
         super.selectionDidChange(textInput)
+        releaseSuppressionIfChangedExternally()
         syncCompositionWithDocument()
         updateAutoCapitalization()
         scheduleDeferredUpdates()
@@ -399,6 +403,19 @@ final class KeyboardViewController: UIInputViewController {
     //                 ─▶ TranslationCoordinator.update(디바운스 · 캐시 · 번역)
     //                 ─▶ onChange ─▶ renderCandidateBar ─▶ CandidateBarView
 
+    /// 붙여넣기처럼 키를 누르지 않고 문서가 바뀌면, 칩 입력 직후의 번역 멈춤을 푼다.
+    /// iOS는 키보드가 직접 넣은 텍스트에도 textDidChange를 보내므로,
+    /// 커서 앞이 방금 넣은 번역문으로 끝나면 우리 변경으로 보고 멈춤을 유지한다.
+    private func releaseSuppressionIfChangedExternally() {
+        guard suppressTranslation else { return }
+        let context = textDocumentProxy.documentContextBeforeInput ?? ""
+        if let inserted = lastInsertedTranslation, !inserted.isEmpty, context.hasSuffix(inserted) {
+            return
+        }
+        suppressTranslation = false
+        lastInsertedTranslation = nil
+    }
+
     /// 편집이 끝날 때마다 호출된다. 비밀번호 입력창이거나 방금 칩으로 넣은 직후면 번역하지 않는다.
     private func scheduleTranslation() {
         guard !isSecureContext, !suppressTranslation else { return }
@@ -432,6 +449,7 @@ final class KeyboardViewController: UIInputViewController {
                 text += " "
             }
             proxy.insertText(text)
+            lastInsertedTranslation = text
         case .append:
             let needsSpace = source.trailingWhitespace.isEmpty
             var text = (needsSpace ? " " : "") + translation
@@ -439,6 +457,7 @@ final class KeyboardViewController: UIInputViewController {
                 text += " "
             }
             proxy.insertText(text)
+            lastInsertedTranslation = text
         }
 
         // 3) 클립보드 복사(전체 접근이 있을 때만) → 4) 체크 애니메이션·햅틱·토스트로 결과를 알린다.

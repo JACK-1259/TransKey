@@ -25,7 +25,10 @@ struct SimulatorDemoProvider: TranslationProvider {
 
     func translate(_ text: String, from source: Language?, to targets: [Language]) async throws -> [Language: String] {
         let key = text.lowercased()
-        guard let entry = Self.entries.first(where: { $0.ko == key || $0.en == key }) else {
+        // 어느 언어로 입력해도 같은 단어 묶음을 찾는다(예: "manzana" → 사과/apple/りんご).
+        guard let entry = Self.entries.first(where: {
+            [$0.ko, $0.en, $0.ja, $0.es].contains(key)
+        }) else {
             throw TranslationError.unsupported
         }
         var result: [Language: String] = [:]
