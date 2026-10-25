@@ -88,13 +88,16 @@ public struct TransKeySettings: Codable, Equatable, Sendable {
         enabledTargets.count < Language.maxEnabledTargets
     }
 
-    /// 원문 언어에 맞춘 칩 목록. 원문과 같은 언어는 빼고,
-    /// 자동 감지가 켜져 있으면 한국어가 아닌 원문에 KO 칩을 맨 앞에 넣는다(예: 영어 입력 → KO, JA).
+    /// 원문 언어에 맞춘 칩 목록. 모든 언어에 같은 규칙을 쓴다.
+    /// 1) 켜 둔 언어에서 원문과 같은 언어를 빼고
+    /// 2) 자동 감지가 켜져 있고 원문이 한국어가 아니면 한국어를 맨 앞에 넣은 뒤
+    /// 3) 후보 바 칸 수(최대 3개)만큼 자른다.
+    /// 예) EN·JA·ZH가 켜져 있을 때: 한국어 입력 → EN, JA, ZH / 영어 입력 → KO, JA, ZH / 스페인어 입력 → KO, EN, JA
     public func targets(for source: Language) -> [Language] {
         var result = orderedTargets.filter { $0 != source }
         if autoDetectSourceLanguage, source != .korean {
             result.insert(.korean, at: 0)
         }
-        return result
+        return Array(result.prefix(Language.maxEnabledTargets))
     }
 }

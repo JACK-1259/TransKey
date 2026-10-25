@@ -18,18 +18,6 @@ public struct SourceText: Equatable, Sendable {
     }
 }
 
-public enum SourceLanguageDetector {
-    /// 한글 음절이 있으면 한국어, 라틴 문자가 있으면 영어. 둘 다 없으면 nil(숫자, 기호, 미완성 자모만 있는 경우).
-    public static func detect(_ text: String) -> Language? {
-        var hasLatin = false
-        for scalar in text.unicodeScalars {
-            if (0xAC00...0xD7A3).contains(scalar.value) { return .korean }
-            if ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar) { hasLatin = true }
-        }
-        return hasLatin ? .english : nil
-    }
-}
-
 /// 커서 앞 텍스트(`documentContextBeforeInput`)에서 번역할 원문을 뽑는다.
 ///
 /// 예) "나는 사과 " (끝에 공백)
@@ -42,7 +30,8 @@ public enum SourceTextExtractor {
 
     private static let wordSeparators: Set<Character> = [
         ".", ",", "!", "?", ";", ":", "\"", "(", ")", "[", "]", "{", "}", "<", ">",
-        "…", "·", "。", "、", "「", "」", "~", "/", "|", "\\"
+        "…", "·", "。", "、", "「", "」", "~", "/", "|", "\\",
+        "¿", "¡", "«", "»", "！", "？", "，", "：", "；"
     ]
     private static let sentenceTerminators: Set<Character> = [".", "!", "?", "。", "…"]
 
